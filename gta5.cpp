@@ -359,7 +359,7 @@ struct GTA5 : public GameController {
 
 				cur_view_proj_inv = debug_view_proj_inv;
 
-				float4x4 velocity_matrix[3] = { prev_view_proj_inv, cur_view_proj_inv, cur_view };
+				float4x4 velocity_matrix[3] = { prev_view_proj_inv, cur_view_proj_inv, cur_view_proj };
 
 				mul(&debug_proj, rage_mat[1].affine_inv(), rage_mat[2]);
 
