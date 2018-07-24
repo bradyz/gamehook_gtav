@@ -102,8 +102,8 @@ struct GTA5 : public GameController {
 	std::unordered_set<ShaderHash> final_shader = { ShaderHash("6eef7895:a8818cdd:d19840f5:68c224f4") };
 
 	std::shared_ptr<Shader> vs_static_shader = make_shader(VS_STATIC, sizeof(VS_STATIC));
-	std::shared_ptr<Shader> ps_output_shader = make_shader(PS_OUTPUT, sizeof(PS_OUTPUT), { {"SV_TARGET5", "velocity"}, {"SV_Target6", "flow_disp"}, {"SV_Target7", "object_id"} });
-	std::shared_ptr<Shader> flow_shader = make_shader(PS_FLOW, sizeof(PS_FLOW), { {"SV_Target0", "flow"}, {"SV_Target1", "disparity"}, {"SV_Target2", "occlusion" } });
+	std::shared_ptr<Shader> ps_output_shader = make_shader(PS_OUTPUT, sizeof(PS_OUTPUT), { {"SV_Target5", "flow_disp"}, {"SV_Target6", "object_id"} });
+	std::shared_ptr<Shader> flow_shader = make_shader(PS_FLOW, sizeof(PS_FLOW), { {"SV_Target0", "flow"}, {"SV_Target1", "disparity"}, {"SV_Target2", "occlusion"}, {"SV_Target3", "velocity"} });
 	std::shared_ptr<Shader> noflow_shader = make_shader(PS_NOFLOW, sizeof(PS_NOFLOW), { {"SV_Target0", "flow"}, {"SV_Target1", "disparity"}, {"SV_Target2", "occlusion"} });
 
 	std::unordered_set<ShaderHash> int_position = {
@@ -143,7 +143,6 @@ struct GTA5 : public GameController {
 
 	virtual std::shared_ptr<Shader> injectShader(std::shared_ptr<Shader> shader) {
 		if (shader->type() == Shader::VERTEX) {
-			// Doesn't have rage matrices.
 			if (!rage_matrices.scan(shader))
 				return nullptr;
 
@@ -171,8 +170,6 @@ struct GTA5 : public GameController {
 		else if (shader->type() == Shader::PIXEL) {
 			if (hasCBuffer(shader, "misc_globals"))
 				return ps_output_shader;
-
-			return nullptr;
 		}
 
 		return nullptr;
@@ -212,12 +209,19 @@ struct GTA5 : public GameController {
 			callPostFx(noflow_shader);
 	}
 
+	bool needs_mat_recompute = false;
+
+	float4x4 cur_view = 0;
+	float4x4 cur_view_proj = 0;
+	float4x4 cur_view_proj_inv = 0;
+
 	float4x4 avg_world = 0;
 	float4x4 avg_world_view = 0;
 	float4x4 avg_world_view_proj = 0;
 
 	float4x4 prev_view = 0;
 	float4x4 prev_view_proj = 0;
+	float4x4 prev_view_proj_inv = 0;
 
 	RenderPassType main_render_pass = RenderPassType::END;
 
@@ -226,6 +230,8 @@ struct GTA5 : public GameController {
 	std::shared_ptr<CBuffer> prev_wheel_buffer;
 	std::shared_ptr<CBuffer> prev_rage_bonemtx;
 	std::shared_ptr<CBuffer> disparity_correction;
+
+	std::shared_ptr<CBuffer> velocity_matrix_buffer;
 
 	TrackedFrame * tracker = nullptr;
 	std::shared_ptr<TrackData> last_vehicle;
@@ -248,6 +254,8 @@ struct GTA5 : public GameController {
 		if (!prev_rage_bonemtx) prev_rage_bonemtx = createCBuffer("prev_rage_bonemtx", BONE_MTX_SIZE);
 		if (!disparity_correction) disparity_correction = createCBuffer("disparity_correction", 2 * sizeof(float));
 
+		if (!velocity_matrix_buffer) velocity_matrix_buffer = createCBuffer("velocity_matrix_buffer", 3 * sizeof(float4x4));
+
 		last_vehicle.reset();
 		wheel_count = 0;
 		tracker = trackNextFrame();
@@ -255,6 +263,8 @@ struct GTA5 : public GameController {
 		avg_world = 0;
 		avg_world_view = 0;
 		avg_world_view_proj = 0;
+
+		needs_mat_recompute = true;
 	}
 
 	virtual void endFrame(uint32_t frame_id) override {
@@ -263,6 +273,10 @@ struct GTA5 : public GameController {
 
 		mul(&prev_view_proj, avg_world.affine_inv(), avg_world_view_proj);
 		mul(&prev_view, avg_world.affine_inv(), avg_world_view);
+
+		this->prev_view = this->cur_view;
+		this->prev_view_proj = this->cur_view_proj;
+		this->prev_view_proj_inv = this->cur_view_proj_inv;
 
 		current_frame_id++;
 
@@ -292,6 +306,8 @@ struct GTA5 : public GameController {
 					type = i->second;
 			}
 
+			std::shared_ptr<GPUMemory> wp = rage_matrices.fetch(this, info.vertex_shader, info.vs_cbuffers, true);
+
 			// Starting the main render pass
 			if (main_render_pass == RenderPassType::START) {
 				albedo_output = info.outputs[0];
@@ -299,17 +315,59 @@ struct GTA5 : public GameController {
 				main_render_pass = RenderPassType::MAIN;
 			}
 
-			std::shared_ptr<GPUMemory> wp = rage_matrices.fetch(this, info.vertex_shader, info.vs_cbuffers, true);
-
 			// Need at least world, world_view, world_view_proj matrices.
 			if (!wp || wp->size() < 3 * sizeof(float4x4))
 				return DEFAULT;
 
-			// Contains gWorld, gWorldView, gWorldViewProj and maybe? gViewInverse.
+			// Contains gWorld, gWorldView, gWorldViewProj, gViewInverse.
 			const float4x4* rage_mat = (const float4x4*)wp->data();
 			const float4x4& world = rage_mat[0];
 
 			float4x4 prev_rage[4] = { rage_mat[0], rage_mat[1], rage_mat[2], rage_mat[3] };
+
+			// Compute the matrices once per frame.
+			if (this->needs_mat_recompute) {
+				const float4x4& world_inv = world.affine_inv();
+
+				mul(&this->cur_view, world_inv, rage_mat[1]);
+				mul(&this->cur_view_proj, world_inv, rage_mat[2]);
+
+				float4x4 proj;
+				
+				mul(&proj, rage_mat[1].affine_inv(), rage_mat[2]);
+
+				const float4x4& proj_inv = proj.affine_inv();
+
+				mul(&this->cur_view_proj_inv, proj_inv, rage_mat[3]);
+
+				float4x4 debug_cur_view = rage_mat[3].affine_inv();
+				float4x4 debug_view_proj_inv = cur_view_proj.affine_inv();
+				float4x4 debug_proj;
+
+				// LOG(INFO) << debug_view_proj_inv;
+
+				cur_view_proj_inv = debug_view_proj_inv;
+
+				float4x4 velocity_matrix[3] = { prev_view_proj_inv, cur_view_proj_inv, cur_view };
+
+				mul(&debug_proj, rage_mat[1].affine_inv(), rage_mat[2]);
+
+				//LOG(INFO) << debug_cur_view;
+				//LOG(INFO) << world_inv;
+				//LOG(INFO) << debug_proj;
+				//LOG(INFO) << cur_view_proj_inv;
+				//LOG(INFO) << cur_view;
+
+				velocity_matrix_buffer->set(velocity_matrix);
+				bindCBuffer(velocity_matrix_buffer);
+
+				//for (int i = 0; i < 4; i++)
+				//	for (int j = 0; j < 4; j++)
+				//		if (proj[i][j] > -1e-2 && proj[i][j] < 1e-2)
+				//			proj[i][j] = 0.0;
+
+				this->needs_mat_recompute = false;
+			}
 
 			mul(&prev_rage[1], world, prev_view);
 			mul(&prev_rage[2], world, prev_view_proj);

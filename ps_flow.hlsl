@@ -14,7 +14,13 @@ cbuffer disparity_correction {
 	float disp_b = 0.0;
 };
 
-void main(in float4 p : SV_POSITION, in float2 t : TEX_COORD, out float2 flow : SV_Target0, out float disparity : SV_Target1, out float occlusion: SV_Target2) {
+cbuffer velocity_matrices {
+	row_major float4x4 prevViewProjInv;
+	row_major float4x4 curViewProjInv;
+	row_major float4x4 curView;
+};
+
+void main(in float4 p : SV_POSITION, in float2 t : TEX_COORD, out float2 flow : SV_Target0, out float disparity : SV_Target1, out float occlusion: SV_Target2, out float4 velocity : SV_Target3) {
 	uint W, H;
 
 	flow_disp.GetDimensions(W, H);
@@ -47,4 +53,12 @@ void main(in float4 p : SV_POSITION, in float2 t : TEX_COORD, out float2 flow : 
 		flow = 0. / 0.; // NaN
 	else
 		flow = float2(X_0_W - x, Y_0_H - y) - 0.5;
+
+	 float4 prev_pos = float4(x, y, D_prev, 1.0);
+	 float4 cur_pos = float4(X_0_W, Y_0_H, D_cur, 1.0);
+
+	float4 prev_world = mul(prevViewProjInv, prev_pos);
+	float4 cur_world = mul(curViewProjInv, cur_pos);
+
+	velocity = mul(curView, cur_world - prev_world);
 }

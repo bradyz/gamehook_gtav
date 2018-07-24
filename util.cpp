@@ -1,4 +1,5 @@
 #include "util.h"
+#include <iomanip>
 #include <algorithm>
 #include <emmintrin.h>
 
@@ -69,10 +70,11 @@ bool hasTexture(std::shared_ptr<Shader> s, const std::string & name) {
 }
 
 std::ostream & operator<<(std::ostream & s, const float4x4 & f) {
-	return s << "[ [" << f.d[0][0] << ", " << f.d[0][1] << ", " << f.d[0][2] << ", " << f.d[0][3] << "], ["
-		<< f.d[1][0] << ", " << f.d[1][1] << ", " << f.d[1][2] << ", " << f.d[1][3] << "], ["
-		<< f.d[2][0] << ", " << f.d[2][1] << ", " << f.d[2][2] << ", " << f.d[2][3] << "], ["
-		<< f.d[3][0] << ", " << f.d[3][1] << ", " << f.d[3][2] << ", " << f.d[3][3] << "] ]";
+	return s  << std::setprecision(2) << "[\n"
+		<< " [" << f.d[0][0] << ", " << f.d[0][1] << ", " << f.d[0][2] << ", " << f.d[0][3] << "],\n" 
+		<< " [" << f.d[1][0] << ", " << f.d[1][1] << ", " << f.d[1][2] << ", " << f.d[1][3] << "],\n"
+		<< " [" << f.d[2][0] << ", " << f.d[2][1] << ", " << f.d[2][2] << ", " << f.d[2][3] << "],\n"
+		<< " [" << f.d[3][0] << ", " << f.d[3][1] << ", " << f.d[3][2] << ", " << f.d[3][3] << "]\n]";
 }
 
 void mul(float4x4 * out, const float4x4 & a, const float4x4 & b) {
@@ -126,7 +128,7 @@ float4x4 & float4x4::operator=(float v) {
 	return *this;
 }
 
-float4x4 float4x4::affine_inv() {
+float4x4 float4x4::affine_inv() const {
 	float4x4 r;
 	float det = +d[0][0]*(d[1][1]*d[2][2] - d[2][1]*d[1][2])
 		       - d[0][1]*(d[1][0]*d[2][2] - d[1][2]*d[2][0])
