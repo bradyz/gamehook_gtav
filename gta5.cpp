@@ -99,7 +99,8 @@ struct GTA5 : public GameController {
 	std::unordered_map<ShaderHash, ObjectType> object_type;
 
 	// Find a better way to find the final shader.
-	std::unordered_set<ShaderHash> final_shader = { ShaderHash("6eef7895:a8818cdd:d19840f5:68c224f4") };
+	std::unordered_set<ShaderHash> final_shader;
+	// std::unordered_set<ShaderHash> final_shader = { ShaderHash("6eef7895:a8818cdd:d19840f5:68c224f4") };
 
 	std::shared_ptr<Shader> vs_static_shader = make_shader(VS_STATIC, sizeof(VS_STATIC));
 	std::shared_ptr<Shader> ps_output_shader = make_shader(PS_OUTPUT, sizeof(PS_OUTPUT), { {"SV_Target5", "flow_disp"}, {"SV_Target6", "object_id"} });
@@ -168,6 +169,16 @@ struct GTA5 : public GameController {
 			return modified_shader;
 		}
 		else if (shader->type() == Shader::PIXEL) {
+			if (hasTexture(shader, "BackBufferTexture")) {
+				final_shader.insert(shader->hash());
+			}
+
+			// v1.0.1365.1 and newer
+			if (hasTexture(shader, "SSLRSampler") && hasTexture(shader, "HDRSampler")) {
+				// Other candidate textures include "MotionBlurSampler", "BlurSampler", but might depend on graphics settings
+				final_shader.insert(shader->hash());
+			}
+
 			if (hasCBuffer(shader, "misc_globals"))
 				return ps_output_shader;
 		}
