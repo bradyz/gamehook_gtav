@@ -435,6 +435,8 @@ struct GTA5 : public GameController {
 				else
 					object = (*tracker)(position, orientation, 0.1f, 0.1f, TrackedFrame::UNKNOWN);
 
+				LOG(INFO) << object << " " << gta_type;
+
 				if (object) {
 					std::shared_ptr<TrackData> track = std::dynamic_pointer_cast<TrackData>(object->private_data);
 
@@ -468,18 +470,9 @@ struct GTA5 : public GameController {
 					if (type == PEDESTRIAN || type == BONE_MTX) {
 						std::shared_ptr<GPUMemory> bm = rage_bonemtx.fetch(this, info.vertex_shader, info.vs_cbuffers, true);
 
-						if (bm) {
-							if (!track->cur_bones.count(info.vertex_buffer.id)) {
-								memcpy(&track->cur_bones[info.vertex_buffer.id], bm->data(), sizeof(TrackData::BoneData));
-								TS += sizeof(TrackData::BoneData);
-							}
-							else if (0) {
-								if (memcmp(&track->cur_bones[info.vertex_buffer.id], bm->data(), sizeof(TrackData::BoneData))) {
-									LOG(WARN) << "Bone matrix changed for object " << info.pixel_shader << " " << info.vertex_shader << " " << info.vertex_buffer.id;
-									LOG(INFO) << object->type() << " " << object->id;
-									return HIDE;
-								}
-							}
+						if (bm && !track->cur_bones.count(info.vertex_buffer.id)) {
+							memcpy(&track->cur_bones[info.vertex_buffer.id], bm->data(), sizeof(TrackData::BoneData));
+							TS += sizeof(TrackData::BoneData);
 						}
 					}
 

@@ -54,8 +54,8 @@ void main(in float4 p : SV_POSITION, in float2 t : TEX_COORD, out float2 flow : 
 	else
 		flow = float2(X_0_W - x, Y_0_H - y) - 0.5;
 
-	 float4 prev_pos = float4(x / W * 2.0 - 1.0, y / H * 2.0 - 1.0, D_prev, 1.0);
-	 float4 cur_pos = float4(X_0_1 * 2.0 - 1.0, Y_0_1 * 2.0 - 1.0, D_cur, 1.0);
+	float4 prev_pos = float4(x / W * 2.0 - 1.0, y / H * 2.0 - 1.0, D_prev, 1.0);
+	float4 cur_pos = float4(X_0_1 * 2.0 - 1.0, Y_0_1 * 2.0 - 1.0, D_cur, 1.0);
 
 	float4 prev_world = mul(prevViewProjInv, prev_pos);
 	float4 cur_world = mul(curViewProjInv, cur_pos);
