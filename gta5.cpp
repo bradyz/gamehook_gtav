@@ -169,15 +169,13 @@ struct GTA5 : public GameController {
 			return modified_shader;
 		}
 		else if (shader->type() == Shader::PIXEL) {
-			if (hasTexture(shader, "BackBufferTexture")) {
+			// Before and after v1.0.1365.1.
+			// Other candidate textures include "MotionBlurSampler", "BlurSampler",
+			// but might depend on graphics settings.
+			if (hasTexture(shader, "BackBufferTexture")) 
 				final_shader.insert(shader->hash());
-			}
-
-			// v1.0.1365.1 and newer
-			if (hasTexture(shader, "SSLRSampler") && hasTexture(shader, "HDRSampler")) {
-				// Other candidate textures include "MotionBlurSampler", "BlurSampler", but might depend on graphics settings
+			else if (hasTexture(shader, "SSLRSampler") && hasTexture(shader, "HDRSampler"))
 				final_shader.insert(shader->hash());
-			}
 
 			if (hasCBuffer(shader, "misc_globals"))
 				return ps_output_shader;
@@ -208,7 +206,9 @@ struct GTA5 : public GameController {
 		// float disp_ab[2] = { -d / e, -c / d };
 		// LOG(INFO) << "disp_ab " << -d / e << " " << -c / d;
 
-		// The camera params either change, or there is a certain degree of numerical instability (and fov changes, but setting the camera properly is hard ;( )
+		// The camera params either change,
+		// or there is a certain degree of numerical instability
+		// (and fov changes, but setting the camera properly is hard ;( )
 		float disp_ab[2] = { 6., 4e-5 };
 
 		disparity_correction->set((const float*)disp_ab, 2, 0 * sizeof(float));
@@ -222,13 +222,13 @@ struct GTA5 : public GameController {
 
 	bool needs_mat_recompute = false;
 
-	float4x4 cur_view = 0;
-	float4x4 cur_view_proj = 0;
-	float4x4 cur_view_proj_inv = 0;
-
 	float4x4 avg_world = 0;
 	float4x4 avg_world_view = 0;
 	float4x4 avg_world_view_proj = 0;
+
+	float4x4 cur_view = 0;
+	float4x4 cur_view_proj = 0;
+	float4x4 cur_view_proj_inv = 0;
 
 	float4x4 prev_view = 0;
 	float4x4 prev_view_proj = 0;
@@ -340,42 +340,14 @@ struct GTA5 : public GameController {
 			if (this->needs_mat_recompute) {
 				const float4x4& world_inv = world.affine_inv();
 
-				mul(&this->cur_view, world_inv, rage_mat[1]);
 				mul(&this->cur_view_proj, world_inv, rage_mat[2]);
 
-				float4x4 proj;
-				
-				mul(&proj, rage_mat[1].affine_inv(), rage_mat[2]);
-
-				const float4x4& proj_inv = proj.affine_inv();
-
-				mul(&this->cur_view_proj_inv, proj_inv, rage_mat[3]);
-
-				float4x4 debug_cur_view = rage_mat[3].affine_inv();
-				float4x4 debug_view_proj_inv = cur_view_proj.affine_inv();
-				float4x4 debug_proj;
-
-				// LOG(INFO) << debug_view_proj_inv;
-
-				cur_view_proj_inv = debug_view_proj_inv;
+				this->cur_view_proj_inv = this->cur_view_proj.affine_inv();
 
 				float4x4 velocity_matrix[3] = { prev_view_proj_inv, cur_view_proj_inv, cur_view_proj };
 
-				mul(&debug_proj, rage_mat[1].affine_inv(), rage_mat[2]);
-
-				//LOG(INFO) << debug_cur_view;
-				//LOG(INFO) << world_inv;
-				//LOG(INFO) << debug_proj;
-				//LOG(INFO) << cur_view_proj_inv;
-				//LOG(INFO) << cur_view;
-
 				velocity_matrix_buffer->set(velocity_matrix);
 				bindCBuffer(velocity_matrix_buffer);
-
-				//for (int i = 0; i < 4; i++)
-				//	for (int j = 0; j < 4; j++)
-				//		if (proj[i][j] > -1e-2 && proj[i][j] < 1e-2)
-				//			proj[i][j] = 0.0;
 
 				this->needs_mat_recompute = false;
 			}
@@ -425,7 +397,7 @@ struct GTA5 : public GameController {
 				Vec3f position = { world[3][0], world[3][1], world[3][2] };
 				Quaternion orientation = Quaternion::fromMatrix(world);
 
-				TrackedFrame::Object* object;
+				TrackedFrame::Object* object = nullptr;
 
 				// A tighter radius for unknown objects
 				if (gta_type == TrackedFrame::UNKNOWN)
@@ -434,8 +406,6 @@ struct GTA5 : public GameController {
 					object = (*tracker)(position, orientation, 1.f, 10.f, TrackedFrame::PED);
 				else
 					object = (*tracker)(position, orientation, 0.1f, 0.1f, TrackedFrame::UNKNOWN);
-
-				LOG(INFO) << object << " " << gta_type;
 
 				if (object) {
 					std::shared_ptr<TrackData> track = std::dynamic_pointer_cast<TrackData>(object->private_data);

@@ -228,7 +228,8 @@ TrackedFrame::Object* TrackedFrame::operator()(const Vec3f& p, const Quaternion&
 
 		bool close_enough_pos = dist < closest_dist;
 		bool close_enough_ang = D2(candidate->q, q) < angular_dist;
-		bool match_type = (candidate->type() == t || t == UNKNOWN);
+		// bool match_type = (candidate->type() == t || t == UNKNOWN);
+		bool match_type = (t == UNKNOWN || objects[i].type() == t || (t == ObjectType::PED && objects[i].type() == ObjectType::PLAYER));
 
 		if (close_enough_pos && close_enough_ang && match_type) {
 			closest_dist = dist;
