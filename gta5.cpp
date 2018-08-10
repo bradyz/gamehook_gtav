@@ -214,19 +214,28 @@ struct GTA5 : public GameController {
 		disparity_correction->set((const float*)disp_ab, 2, 0 * sizeof(float));
 		bindCBuffer(disparity_correction);
 
+		float4x4 velocity_matrix[4] = {
+			this->prev_view_proj,
+			this->prev_view_proj_inv,
+			this->cur_view_proj,
+			this->cur_view_proj_inv
+		};
+
+		velocity_matrix_buffer->set((const float4x4*)velocity_matrix, 4, 0);
+		bindCBuffer(velocity_matrix_buffer);
+
 		if (currentRecordingType() == DRAW)
 			callPostFx(flow_shader);
 		else
 			callPostFx(noflow_shader);
 	}
 
-	bool needs_mat_recompute = false;
+	bool requires_view_proj_recompute = true;
 
 	float4x4 avg_world = 0;
 	float4x4 avg_world_view = 0;
 	float4x4 avg_world_view_proj = 0;
 
-	float4x4 cur_view = 0;
 	float4x4 cur_view_proj = 0;
 	float4x4 cur_view_proj_inv = 0;
 
@@ -241,7 +250,6 @@ struct GTA5 : public GameController {
 	std::shared_ptr<CBuffer> prev_wheel_buffer;
 	std::shared_ptr<CBuffer> prev_rage_bonemtx;
 	std::shared_ptr<CBuffer> disparity_correction;
-
 	std::shared_ptr<CBuffer> velocity_matrix_buffer;
 
 	TrackedFrame * tracker = nullptr;
@@ -274,7 +282,7 @@ struct GTA5 : public GameController {
 		avg_world_view = 0;
 		avg_world_view_proj = 0;
 
-		needs_mat_recompute = true;
+		requires_view_proj_recompute = true;
 	}
 
 	virtual void endFrame(uint32_t frame_id) override {
@@ -284,10 +292,7 @@ struct GTA5 : public GameController {
 		mul(&prev_view, avg_world.affine_inv(), avg_world_view);
 		mul(&prev_view_proj, avg_world.affine_inv(), avg_world_view_proj);
 
-		this->prev_view_proj_inv = this->cur_view_proj.affine_inv();
-		// this->prev_view = this->cur_view;
-		// this->prev_view_proj = this->cur_view_proj;
-		// this->prev_view_proj_inv = this->cur_view_proj_inv;
+		this->prev_view_proj_inv = this->prev_view_proj.inv();
 
 		current_frame_id++;
 
@@ -333,6 +338,13 @@ struct GTA5 : public GameController {
 			// Contains gWorld, gWorldView, gWorldViewProj, gViewInverse.
 			const float4x4* rage_mat = (const float4x4*)wp->data();
 			const float4x4& world = rage_mat[0];
+
+			if (this->requires_view_proj_recompute) {
+				mul(&this->cur_view_proj, world.affine_inv(), rage_mat[2]);
+				this->cur_view_proj_inv = this->cur_view_proj.inv();
+
+				this->requires_view_proj_recompute = false;
+			}
 
 			float4x4 prev_rage[4] = { rage_mat[0], rage_mat[1], rage_mat[2], rage_mat[3] };
 
@@ -461,19 +473,6 @@ struct GTA5 : public GameController {
 
 			id_buffer->set(id);
 			bindCBuffer(id_buffer);
-
-			mul(&this->cur_view_proj, world.affine_inv(), rage_mat[2]);
-			this->cur_view_proj_inv = this->cur_view_proj.affine_inv();
-
-			float4x4 velocity_matrix[4] = {
-				this->prev_view_proj,
-				this->prev_view_proj_inv,
-				this->cur_view_proj,
-				this->cur_view_proj_inv
-			};
-
-			velocity_matrix_buffer->set(velocity_matrix);
-			bindCBuffer(velocity_matrix_buffer);
 
 			return RIGID;
 		}

@@ -28,6 +28,7 @@ struct float4x4 {
 	float4x4(float v = 0);
 	float4x4 & operator=(float v);
 	float4x4 affine_inv() const;
+	float4x4 inv() const;
 	operator bool() const;
 	float * operator[](size_t i) { return d[i]; }
 	const float * operator[](size_t i) const { return d[i]; }

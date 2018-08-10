@@ -14,7 +14,7 @@ cbuffer disparity_correction {
 	float disp_b = 0.0;
 };
 
-cbuffer velocity_matrices {
+cbuffer velocity_matrix_buffer {
 	row_major float4x4 prevViewProj;
 	row_major float4x4 prevViewProjInv;
 
@@ -55,19 +55,27 @@ void main(in float4 p : SV_Position, in float2 t : TEX_COORD, out float2 flow : 
 	float4 cur_prev_pos = mul(mul(cur_pos, curViewProjInv), prevViewProj);
 	float4 prev_cur_pos = mul(mul(prev_pos, prevViewProjInv), curViewProj);
 
+	float4 cur_world = mul(cur_pos, curViewProjInv);
+	float4 prev_world = mul(prev_pos, prevViewProjInv);
+
 	float4 flow_3d = cur_pos - prev_pos;
 	float4 static_flow = cur_pos - cur_prev_pos;
+
+	float4 phil = flow_3d - static_flow;
+	float4 mine = cur_pos - prev_cur_pos;
+
+	// velocity = (float4) mul((float1x4) cur_pos, curViewProjInv);
 
 	if (D_prev <= 0.0)
 		velocity = 0. / 0.;
 	else
-		velocity = flow_3d;
+		velocity = phil;
 
-	// Temporarily disabled.
 	float prev_disparity;
 
 	disparity = disp_a * (D_cur + disp_b);
 	prev_disparity = disp_a * (D_prev + disp_b);
 
+	// Temporarily disabled.
 	occlusion = (1. / prev_disparity) - (1. / prev_disp.Sample(S, float2(X_0_1, Y_0_1)));
 }

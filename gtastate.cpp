@@ -163,7 +163,6 @@ void TrackedFrame::fetch() {
 	STATS::STAT_GET_INT(GAMEPLAY::GET_HASH_KEY("SP1_TOTAL_CASH"), &info.money, -1);
 }
 
-
 void TrackedFrame::fetch_helper(int(*object_getter)(int*, int), ObjectType object_type) {
 	Player p = PLAYER::PLAYER_ID();
 	Ped pp = PLAYER::PLAYER_PED_ID();
