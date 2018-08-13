@@ -34,8 +34,8 @@ void main(in float4 p : SV_Position, in float2 t : TEX_COORD, out float2 flow : 
 
 	// Map from ndc coordinates [-1, 1] -> [0, 1].
 	// Note: y coordinate is flipped.
-	float X_0_1 = (f.x + 1) * 0.5;
-	float Y_0_1 = (1 - f.y) * 0.5;
+	float X_0_1 = (f.x + 1.0) * 0.5;
+	float Y_0_1 = (1.0 - f.y) * 0.5;
 
 	// Map to screen coordinates.
 	float X_0_W = X_0_1 * W;
@@ -49,22 +49,29 @@ void main(in float4 p : SV_Position, in float2 t : TEX_COORD, out float2 flow : 
 	else
 		flow = float2(X_0_W - x, Y_0_H - y) - 0.5;
 
-	float4 prev_pos = float4(X_0_1 * 2.0 - 1.0, Y_0_1 * 2.0 - 1.0, D_prev, 1.0);
-	float4 cur_pos = float4(t.x * 2.0 - 1.0, t.y * 2.0 - 1.0, D_cur, 1.0);
+	// NDC coordinates.
+	float prev_x = X_0_W / W / 0.5 - 1.0;
+	float prev_y = -(Y_0_H / H / 0.5 - 1.0);
+
+	float cur_x = ((float) x) / W / 0.5 - 1.0;
+	float cur_y = -(((float) y) / H / 0.5 - 1.0);
+
+	float4 prev_pos = float4(prev_x, prev_y, D_prev, 1.0);
+	float4 cur_pos = float4(cur_x, cur_y, D_cur, 1.0);
 
 	float4 cur_prev_pos = mul(mul(cur_pos, curViewProjInv), prevViewProj);
-	float4 prev_cur_pos = mul(mul(prev_pos, prevViewProjInv), curViewProj);
 
 	float4 flow_3d = cur_pos - prev_pos;
 	float4 static_flow = cur_pos - cur_prev_pos;
 
-	float4 phil = flow_3d - static_flow;
-	float4 mine = cur_pos - prev_cur_pos;
-
 	if (D_prev <= 0.0)
 		velocity = 0. / 0.;
-	else
-		velocity = phil;
+	else {
+		velocity = flow_3d - static_flow;
+
+		velocity.x = -(velocity.x) * 0.5 * W;
+		velocity.y =  (velocity.y) * 0.5 * H;
+	}
 
 	float prev_disparity;
 

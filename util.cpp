@@ -154,8 +154,7 @@ float4x4 float4x4::affine_inv() const {
 }
 
 bool gluInvertMatrix(const double m[16], double invOut[16]) {
-	double inv[16], det;
-	int i;
+	double inv[16];
 
 	inv[0] = m[5] * m[10] * m[15] -
 		m[5] * m[11] * m[14] -
@@ -269,14 +268,14 @@ bool gluInvertMatrix(const double m[16], double invOut[16]) {
 		m[8] * m[1] * m[6] -
 		m[8] * m[2] * m[5];
 
-	det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
+	double det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
 
 	if (det == 0)
 		return false;
 
 	det = 1.0 / det;
 
-	for (i = 0; i < 16; i++)
+	for (int i = 0; i < 16; i++)
 		invOut[i] = inv[i] * det;
 
 	return true;
