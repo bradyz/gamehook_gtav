@@ -89,9 +89,9 @@ TOJSON(RenderInfo, index_buffer, vertex_buffer, vertex_shader, pixel_shader, tex
 
 struct GTA5 : public GameController {
 	enum RenderPassType {
-		END = 0,
-		START = 1,
-		MAIN = 2,
+		START = 0,
+		MAIN = 1,
+		END = 2,
 	};
 
 	struct VSInfo {
@@ -403,41 +403,42 @@ struct GTA5 : public GameController {
 		// Copy the disparity buffer for occlusion testing
 		copyTarget("prev_disp", "disparity");
 
-		LOG(INFO) << "Time elapsed (milliseconds): " << time() - start_time << "\tTotal size (bytes): " << TS;
+		LOG(INFO) << "Elapsed (ms): " << time() - start_time << "\tSize (bytes): " << TS;
 	}
 
 	RenderTargetView albedo_output;
 
 	virtual void onBeginDraw(const DrawInfo & info) override {
 		if ((currentRecordingType() != NONE) &&
-                info.target.outputs.size() &&
-                info.target.outputs[0].W == defaultWidth() && info.target.outputs[0].H == defaultHeight() &&
-                info.target.outputs.size() >= 2 &&
-                info.type == DrawInfo::INDEX && info.instances == 0) {
+			info.target.outputs.size() &&
+			info.target.outputs[0].W == defaultWidth() && info.target.outputs[0].H == defaultHeight() &&
+			info.target.outputs.size() >= 2 &&
+			info.type == DrawInfo::INDEX && info.instances == 0) {
 
 			if (current_vs.rage_matrices && main_render_pass != RenderPassType::END) {
 				std::shared_ptr<GPUMemory> wp = current_vs.rage_matrices.fetch(this, info.buffer.vertex_constant, true);
-				if (main_render_pass == RenderPassType::MAIN) {
-					// Starting the main render pass
+
+				// Starting the main render pass
+				if (main_render_pass == RenderPassType::START) {
 					albedo_output = info.target.outputs[0];
-					main_render_pass = RenderPassType::START;
+					main_render_pass = RenderPassType::MAIN;
 					overrideShader();
 				}
 
-				if (main_render_pass == RenderPassType::START) {
+				if (main_render_pass == RenderPassType::MAIN) {
 					uint32_t id = 0;
 
+					// Fetch the rage matrices gWorld, gWorldView, gWorldViewProj
 					if (wp && wp->size() >= 3 * sizeof(float4x4)) {
-						// Fetch the rage matrices gWorld, gWorldView, gWorldViewProj
 						const float4x4 * rage_mat = (const float4x4 *)wp->data();
-                        const float4x4& world = rage_mat[0];
+						const float4x4& world = rage_mat[0];
 
-                        if (this->requires_view_proj_recompute) {
-                            mul(&this->cur_view_proj, world.affine_inv(), rage_mat[2]);
-                            this->cur_view_proj_inv = this->cur_view_proj.inv();
+						if (this->requires_view_proj_recompute) {
+							mul(&this->cur_view_proj, world.affine_inv(), rage_mat[2]);
+							this->cur_view_proj_inv = this->cur_view_proj.inv();
 
-                            this->requires_view_proj_recompute = false;
-                        }
+							this->requires_view_proj_recompute = false;
+						}
 
 						float4x4 prev_rage[4] = { rage_mat[0], rage_mat[1], rage_mat[2], rage_mat[3] };
 
@@ -447,7 +448,7 @@ struct GTA5 : public GameController {
 						// Sum up the world and world_view_proj matrices to later compute the view_proj matrix
 						if (current_vs.type != VSInfo::PEDESTRIAN && current_vs.type != VSInfo::PLAYER) {
 							// There is a 'BUG' (or feature) in GTA V that doesn't draw Franklyn correctly
-                            // in first person view (rage_mat are wrong)
+							// in first person view (rage_mat are wrong)
 							add(&avg_world, avg_world, rage_mat[0]);
 							add(&avg_world_view, avg_world_view, rage_mat[1]);
 							add(&avg_world_view_proj, avg_world_view_proj, rage_mat[2]);
@@ -474,27 +475,27 @@ struct GTA5 : public GameController {
 							id = last_vehicle->id;
 							wheel_count++;
 						}
-                        else if (tracker) {
+						else if (tracker) {
 							// Determine the GTA type for search
 							TrackedFrame::ObjectType gta_type = TrackedFrame::UNKNOWN;
 
 							if (current_vs.type == VSInfo::PEDESTRIAN)
-                                gta_type = TrackedFrame::PED;
+								gta_type = TrackedFrame::PED;
 							if (current_vs.type == VSInfo::VEHICLE)
-                                gta_type = TrackedFrame::VEHICLE;
+								gta_type = TrackedFrame::VEHICLE;
 
 							Vec3f v = { rage_mat[0].d[3][0], rage_mat[0].d[3][1], rage_mat[0].d[3][2] };
-                            Quaternion orientation = Quaternion::fromMatrix(world);
+							Quaternion orientation = Quaternion::fromMatrix(world);
 
 							TrackedFrame::Object * object;
 
 							// A tighter radius for unknown objects
 							if (gta_type == TrackedFrame::UNKNOWN)
-                                object = (*tracker)(v, orientation, 0.01f, 0.01f, gta_type);
+								object = (*tracker)(v, orientation, 0.01f, 0.01f, gta_type);
 							else if (gta_type == TrackedFrame::PED)
-                                object = (*tracker)(v, orientation, 1.f, 10.f, gta_type);
+								object = (*tracker)(v, orientation, 1.f, 10.f, gta_type);
 							else
-                                object = (*tracker)(v, orientation, 0.1f, 0.1f, TrackedFrame::UNKNOWN);
+								object = (*tracker)(v, orientation, 0.1f, 0.1f, TrackedFrame::UNKNOWN);
 
 							if (object) {
 								std::shared_ptr<TrackData> track = std::dynamic_pointer_cast<TrackData>(object->private_data);
@@ -527,7 +528,8 @@ struct GTA5 : public GameController {
 										if (!track->cur_bones.count(info.buffer.vertex.id)) {
 											memcpy(&track->cur_bones[info.buffer.vertex.id], bm->data(), sizeof(TrackData::BoneData));
 											TS += sizeof(TrackData::BoneData);
-										} else if (0) {
+										}
+										else if (0) {
 											if (memcmp(&track->cur_bones[info.buffer.vertex.id], bm->data(), sizeof(TrackData::BoneData))) {
 												LOG(WARN) << "Bone matrix changed for object " << info.shader.pixel << " " << info.shader.vertex << " " << info.buffer.vertex.id;
 												LOG(INFO) << object->type() << " " << object->id;
@@ -566,12 +568,12 @@ struct GTA5 : public GameController {
 							}
 						}
 
-                        prev_buffer->set((float4x4*)prev_rage, 4, 0);
-                        bindCBuffer(prev_buffer);
+						prev_buffer->set((float4x4*)prev_rage, 4, 0);
+						bindCBuffer(prev_buffer);
 
 						if (!id) {
 							id = render_info.size() + 1;
-							render_info.push_back({id, info.buffer.index_hash, info.buffer.vertex_hash, info.shader.vertex, info.shader.pixel, info.shader.ps_texture_hash});
+							render_info.push_back({ id, info.buffer.index_hash, info.buffer.vertex_hash, info.shader.vertex, info.shader.pixel, info.shader.ps_texture_hash });
 						}
 
 						id_buffer->set(id);
@@ -579,7 +581,8 @@ struct GTA5 : public GameController {
 					}
 				}
 			}
-		else if (main_render_pass == RenderPassType::START) {
+		}
+		else if (main_render_pass == RenderPassType::MAIN) {
 			// End of the main render pass
 			copyTarget("albedo", albedo_output);
 			main_render_pass = RenderPassType::END;
