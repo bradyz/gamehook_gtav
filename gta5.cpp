@@ -77,6 +77,16 @@ struct VehicleTrack {
 	float4x4 wheel[16][2];
 };
 
+
+struct RenderInfo {
+	uint32_t id;
+	BufferHash index_buffer, vertex_buffer;
+	ShaderHash vertex_shader, pixel_shader;
+	TextureHash texture;
+};
+TOJSON(RenderInfo, index_buffer, vertex_buffer, vertex_shader, pixel_shader, texture);
+
+
 struct GTA5 : public GameController {
 	enum RenderPassType {
 		END = 0,
@@ -134,6 +144,7 @@ struct GTA5 : public GameController {
 
 	std::unordered_map<ShaderHash, VSInfo> vs_info;
 	std::unordered_map<ShaderHash, PSInfo> ps_info;
+	std::vector<RenderInfo> render_info;
 	VSInfo current_vs;
 	PSInfo current_ps;
 
@@ -375,6 +386,7 @@ struct GTA5 : public GameController {
 		TS = 0;
 
 		defaultShader();
+		render_info.clear();
 	}
 
 	virtual void onEndFrame(uint32_t frame_id) override {
@@ -557,13 +569,18 @@ struct GTA5 : public GameController {
                         prev_buffer->set((float4x4*)prev_rage, 4, 0);
                         bindCBuffer(prev_buffer);
 
-                        id_buffer->set(id);
-                        bindCBuffer(id_buffer);
-                    }
-                }
-            }
-        }
+						if (!id) {
+							id = render_info.size() + 1;
+							render_info.push_back({id, info.buffer.index_hash, info.buffer.vertex_hash, info.shader.vertex, info.shader.pixel, info.shader.ps_texture_hash});
+						}
+
+						id_buffer->set(id);
+						bindCBuffer(id_buffer);
+					}
+				}
+			}
 		else if (main_render_pass == RenderPassType::START) {
+			// End of the main render pass
 			copyTarget("albedo", albedo_output);
 			main_render_pass = RenderPassType::END;
 			defaultShader();
@@ -578,10 +595,10 @@ struct GTA5 : public GameController {
 	}
 
 	virtual std::string provideGameState() const override {
+		std::string state = "{ \"render_info\" : " + toJSON(render_info);
 		if (tracker)
-			return toJSON(tracker->info);
-
-		return "";
+			return state + "," + toJSON(tracker->info).substr(1);
+		return state + "}";
 	}
 
 	virtual bool stop() { return stopTracker(); }
