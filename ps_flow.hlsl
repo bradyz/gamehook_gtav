@@ -1,3 +1,5 @@
+#pragma warning( disable : 4008 )
+
 Texture2D<float> prev_disp: register(t1);
 Texture2D<float4> flow_disp: register(t0);
 
@@ -44,8 +46,9 @@ void main(in float4 p : SV_Position, in float2 t : TEX_COORD, out float2 flow : 
 	float D_cur = f.w;
 	float D_prev = f.z;
 
+    // If occluded in previous frame, return NaN.
 	if (D_prev <= 0.0)
-		flow = 0. / 0.; // NaN
+		flow = 0. / 0.;
 	else
 		flow = float2(X_0_W - x, Y_0_H - y) - 0.5;
 
@@ -67,10 +70,8 @@ void main(in float4 p : SV_Position, in float2 t : TEX_COORD, out float2 flow : 
 	if (D_prev <= 0.0)
 		velocity = 0. / 0.;
 	else {
-		velocity = flow_3d - static_flow;
-
-		velocity.x = -(velocity.x) * 0.5 * W;
-		velocity.y =  (velocity.y) * 0.5 * H;
+        velocity.x = (flow_3d.x - static_flow.x) * 0.5 * W;
+        velocity.y = (flow_3d.y - static_flow.y) * 0.5 * H;
 	}
 
 	float prev_disparity;
