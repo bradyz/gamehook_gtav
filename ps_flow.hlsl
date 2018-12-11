@@ -18,9 +18,6 @@ cbuffer disparity_correction {
 
 cbuffer velocity_matrix_buffer {
 	row_major float4x4 prevViewProj;
-	row_major float4x4 prevViewProjInv;
-
-	row_major float4x4 curViewProj;
 	row_major float4x4 curViewProjInv;
 };
 
@@ -46,33 +43,33 @@ void main(in float4 p : SV_Position, in float2 t : TEX_COORD, out float2 flow : 
 	float D_cur = f.w;
 	float D_prev = f.z;
 
-    // If occluded in previous frame, return NaN.
-	if (D_prev <= 0.0)
-		flow = 0. / 0.;
-	else
+    // Deal with occlusions.
+	if (D_prev > 0.0)
 		flow = float2(X_0_W - x, Y_0_H - y) - 0.5;
+	else
+		flow = 0. / 0.;
 
 	// NDC coordinates.
-	float prev_x = X_0_W / W / 0.5 - 1.0;
+	float prev_x =   X_0_W / W / 0.5 - 1.0;
 	float prev_y = -(Y_0_H / H / 0.5 - 1.0);
-
-	float cur_x = ((float) x) / W / 0.5 - 1.0;
-	float cur_y = -(((float) y) / H / 0.5 - 1.0);
-
 	float4 prev_pos = float4(prev_x, prev_y, D_prev, 1.0);
+
+	float cur_x =   ((float) x) / W / 0.5 - 1.0;
+	float cur_y = -(((float) y) / H / 0.5 - 1.0);
 	float4 cur_pos = float4(cur_x, cur_y, D_cur, 1.0);
 
-	float4 cur_prev_pos = mul(mul(cur_pos, curViewProjInv), prevViewProj);
+	float4 cur_pos_prev_frame = mul(mul(cur_pos, curViewProjInv), prevViewProj);
 
-	float4 flow_3d = cur_pos - prev_pos;
-	float4 static_flow = cur_pos - cur_prev_pos;
+    // Normal flow.
+    // float4 result = prev_pos - cur_pos;/ 
+    float4 result = prev_pos - cur_pos_prev_frame;
 
-	if (D_prev <= 0.0)
+    if (D_prev > 0.0) {
+        velocity.x =  result.x * 0.5 * W - 0.5;
+        velocity.y = -result.y * 0.5 * H - 0.5;
+    }
+    else
 		velocity = 0. / 0.;
-	else {
-        velocity.x = (flow_3d.x - static_flow.x) * 0.5 * W;
-        velocity.y = (flow_3d.y - static_flow.y) * 0.5 * H;
-	}
 
 	float prev_disparity;
 
