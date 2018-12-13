@@ -140,6 +140,7 @@ struct GTA5 : public GameController {
 		addCustomTarget("disparity", TargetType::R32_FLOAT);
 		addCustomTarget("occlusion", TargetType::R32_FLOAT);
 		addCustomTarget("object_id", TargetType::R32_UINT);
+		addCustomTarget("texture_id", TargetType::R32_UINT);
 	}
 
 	std::unordered_map<ShaderHash, VSInfo> vs_info;
@@ -155,6 +156,7 @@ struct GTA5 : public GameController {
     //         {"SV_Target5", "flow_disp"},
     //         {"SV_Target6", "object_id"}});
 	std::shared_ptr<Shader> ps_output_shader = make_shader(PS_OUTPUT, sizeof(PS_OUTPUT), {
+			{"SV_Target5", "texture_id"},
             {"SV_Target6", "flow_disp"},
             {"SV_Target7", "object_id"}});
 
@@ -367,7 +369,7 @@ struct GTA5 : public GameController {
 		main_render_pass = RenderPassType::START;
 		albedo_output = RenderTargetView();
 
-		if (!id_buffer) id_buffer = createCBuffer("IDBuffer", sizeof(int));
+		if (!id_buffer) id_buffer = createCBuffer("IDBuffer", 2 * sizeof(int));
 		if (!prev_buffer) prev_buffer = createCBuffer("prev_rage_matrices", 4 * sizeof(float4x4));
 		if (!prev_wheel_buffer) prev_wheel_buffer = createCBuffer("prev_matWheelBuffer", 4 * sizeof(float4x4));
 		if (!prev_rage_bonemtx) prev_rage_bonemtx = createCBuffer("prev_rage_bonemtx", BONE_MTX_SIZE);
@@ -428,6 +430,7 @@ struct GTA5 : public GameController {
 
 				if (main_render_pass == RenderPassType::MAIN) {
 					uint32_t id = 0;
+					uint32_t texture_id = 0;
 
 					// Fetch the rage matrices gWorld, gWorldView, gWorldViewProj
 					if (wp && wp->size() >= 3 * sizeof(float4x4)) {
@@ -566,14 +569,16 @@ struct GTA5 : public GameController {
 						bindCBuffer(prev_buffer);
 
 						if (!id) {
-							id = render_info.size() + 1;
-							render_info.push_back({ id, info.buffer.index_hash, info.buffer.vertex_hash, info.shader.vertex, info.shader.pixel, info.shader.ps_texture_hash });
+							uint32_t tmp_id = render_info.size() + 1;
+							render_info.push_back({ tmp_id, info.buffer.index_hash, info.buffer.vertex_hash, info.shader.vertex, info.shader.pixel, info.shader.ps_texture_hash });
 
 							ShaderHash tmp = info.buffer.vertex_hash;
-							id = 2 * tmp.h[0] + 3 * tmp.h[1] + 5 * tmp.h[2] + 13 * tmp.h[3];
+							texture_id = 2 * tmp.h[0] + 3 * tmp.h[1] + 5 * tmp.h[2] + 13 * tmp.h[3];
 						}
 
-						id_buffer->set(id);
+						uint32_t ids[2] = {id, texture_id };
+
+						id_buffer->set((uint32_t*) ids, 2, 0);
 						bindCBuffer(id_buffer);
 					}
 				}
