@@ -17,8 +17,8 @@ cbuffer disparity_correction {
 };
 
 cbuffer velocity_matrix_buffer {
-	row_major float4x4 prevViewProj;
-	row_major float4x4 curViewProjInv;
+	row_major float4x4 prevViewProjInv;
+	row_major float4x4 curViewProj;
 };
 
 void main(in float4 p : SV_Position, in float2 t : TEX_COORD, out float2 flow : SV_Target0, out float disparity : SV_Target1, out float occlusion : SV_Target2, out float4 velocity : SV_Target3) {
@@ -58,11 +58,13 @@ void main(in float4 p : SV_Position, in float2 t : TEX_COORD, out float2 flow : 
 	float cur_y = -(((float) y) / H / 0.5 - 1.0);
 	float4 cur_pos = float4(cur_x, cur_y, D_cur, 1.0);
 
-	float4 cur_pos_prev_frame = mul(mul(cur_pos, curViewProjInv), prevViewProj);
+	float4 prev_pos_cur_frame = mul(mul(prev_pos, prevViewProjInv), curViewProj);
+
+    prev_pos_cur_frame /= prev_pos_cur_frame.w;
 
     // Normal flow.
     // float4 result = prev_pos - cur_pos;/ 
-    float4 result = prev_pos - cur_pos_prev_frame;
+    float4 result = prev_pos_cur_frame - cur_pos;
 
     if (D_prev > 0.0) {
         velocity.x =  result.x * 0.5 * W - 0.5;

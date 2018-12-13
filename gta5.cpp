@@ -308,19 +308,20 @@ struct GTA5 : public GameController {
 		// (and fov changes, but setting the camera properly is hard ;( )
 		// float disp_ab[2] = { -d / e, -c / d};
 
+		mul(&this->cur_view_proj, avg_world.affine_inv(), avg_world_view_proj);
+		this->cur_view_proj_inv = this->cur_view_proj.inv();
+
 		float disp_ab[2] = { 6., 4e-5 };
 
 		disparity_correction->set((const float*)disp_ab, 2, 0 * sizeof(float));
 		bindCBuffer(disparity_correction);
 
-		float4x4 velocity_matrix[4] = {
-			this->prev_view_proj,
+		float4x4 velocity_matrix[2] = {
 			this->prev_view_proj_inv,
-			this->cur_view_proj,
-			this->cur_view_proj_inv
+			this->cur_view_proj
 		};
 
-		velocity_matrix_buffer->set((const float4x4*)velocity_matrix, 4, 0);
+		velocity_matrix_buffer->set((const float4x4*)velocity_matrix, 2, 0);
 		bindCBuffer(velocity_matrix_buffer);
 
 		if (currentRecordingType() == DRAW)
@@ -371,7 +372,7 @@ struct GTA5 : public GameController {
 		if (!prev_wheel_buffer) prev_wheel_buffer = createCBuffer("prev_matWheelBuffer", 4 * sizeof(float4x4));
 		if (!prev_rage_bonemtx) prev_rage_bonemtx = createCBuffer("prev_rage_bonemtx", BONE_MTX_SIZE);
 		if (!disparity_correction) disparity_correction = createCBuffer("disparity_correction", 2 * sizeof(float));
-		if (!velocity_matrix_buffer) velocity_matrix_buffer = createCBuffer("velocity_matrix_buffer", 4 * sizeof(float4x4));
+		if (!velocity_matrix_buffer) velocity_matrix_buffer = createCBuffer("velocity_matrix_buffer", 2 * sizeof(float4x4));
 
 		last_vehicle.reset();
 		wheel_count = 0;
@@ -403,7 +404,7 @@ struct GTA5 : public GameController {
 		// Copy the disparity buffer for occlusion testing
 		copyTarget("prev_disp", "disparity");
 
-		LOG(INFO) << "Elapsed (ms): " << time() - start_time << "\tSize (bytes): " << TS;
+		// LOG(INFO) << "Elapsed (ms): " << time() - start_time << "\tSize (bytes): " << TS;
 	}
 
 	RenderTargetView albedo_output;
@@ -432,13 +433,6 @@ struct GTA5 : public GameController {
 					if (wp && wp->size() >= 3 * sizeof(float4x4)) {
 						const float4x4 * rage_mat = (const float4x4 *)wp->data();
 						const float4x4& world = rage_mat[0];
-
-						if (this->requires_view_proj_recompute) {
-							mul(&this->cur_view_proj, world.affine_inv(), rage_mat[2]);
-							this->cur_view_proj_inv = this->cur_view_proj.inv();
-
-							this->requires_view_proj_recompute = false;
-						}
 
 						float4x4 prev_rage[4] = { rage_mat[0], rage_mat[1], rage_mat[2], rage_mat[3] };
 
@@ -574,6 +568,9 @@ struct GTA5 : public GameController {
 						if (!id) {
 							id = render_info.size() + 1;
 							render_info.push_back({ id, info.buffer.index_hash, info.buffer.vertex_hash, info.shader.vertex, info.shader.pixel, info.shader.ps_texture_hash });
+
+							ShaderHash tmp = info.buffer.vertex_hash;
+							id = 2 * tmp.h[0] + 3 * tmp.h[1] + 5 * tmp.h[2] + 13 * tmp.h[3];
 						}
 
 						id_buffer->set(id);
